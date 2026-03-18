@@ -985,9 +985,62 @@ _run_once() {
   render
 }
 
+# 将脚本注册为 Claude Code statusline（写入 settings.json）
+_install() {
+  local script_path settings_file tmp_file
+  # realpath 解析符号链接和相对路径，确保写入绝对路径
+  script_path="$(realpath "$0" 2>/dev/null)" || true
+  if [ -z "$script_path" ] || [ ! -f "$script_path" ]; then
+    echo "Error: cannot resolve script path" >&2
+    return 1
+  fi
+  settings_file="${CLAUDE_LENS_SETTINGS:-${HOME}/.claude/settings.json}"
+
+  mkdir -p "$(dirname "$settings_file")"
+  # 原子创建初始 settings（与项目 cache_set 模式一致）
+  if [ ! -f "$settings_file" ]; then
+    tmp_file=$(mktemp)
+    printf '{}' > "$tmp_file" && mv "$tmp_file" "$settings_file"
+  fi
+
+  tmp_file=$(mktemp)
+  if jq --arg cmd "$script_path" \
+    '.statusLine = {"type":"command","command":$cmd}' \
+    "$settings_file" > "$tmp_file" 2>/dev/null && mv "$tmp_file" "$settings_file"; then
+    echo "claude-lens activated: ${script_path}"
+    echo "Restart Claude Code to apply."
+  else
+    rm -f "$tmp_file"
+    echo "Error: failed to update ${settings_file}" >&2
+    return 1
+  fi
+}
+
+# 从 settings.json 中移除 statusLine 配置
+_uninstall() {
+  local settings_file tmp_file
+  settings_file="${CLAUDE_LENS_SETTINGS:-${HOME}/.claude/settings.json}"
+
+  if [ ! -f "$settings_file" ]; then
+    echo "claude-lens deactivated (no settings file)."
+    return 0
+  fi
+
+  tmp_file=$(mktemp)
+  if jq 'del(.statusLine)' "$settings_file" > "$tmp_file" 2>/dev/null && mv "$tmp_file" "$settings_file"; then
+    echo "claude-lens deactivated. Restart Claude Code to apply."
+  else
+    rm -f "$tmp_file"
+    echo "Error: failed to update ${settings_file}" >&2
+    return 1
+  fi
+}
+
 main() {
   case "${1:-}" in
     --version)     echo "claude-lens v${VERSION}"; return 0 ;;
+    --install)     _install; return $? ;;      # 可能失败，传播退出码
+    --uninstall)   _uninstall; return $? ;;   # 同上
     --benchmark)   _benchmark "${2:-100}"; return 0 ;;
     --source-only) return 0 ;;
   esac

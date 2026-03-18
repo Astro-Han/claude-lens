@@ -10,7 +10,15 @@
 claude --plugin https://github.com/Astro-Han/claude-lens
 ```
 
-Then run `/claude-lens:setup` in Claude Code.
+Activate the statusline:
+
+```bash
+lens=$(find ~/.claude/plugins -name 'claude-lens.sh' -type f 2>/dev/null | head -1) && bash "$lens" --install
+```
+
+Restart Claude Code. Done. If `find` returns nothing, the plugin may not be installed yet.
+
+To remove: replace `--install` with `--uninstall`.
 
 ## Features
 
@@ -24,7 +32,24 @@ Then run `/claude-lens:setup` in Claude Code.
 - Session duration, token output speed
 - Worktree-aware path display
 
-**Zero config required.** Sensible defaults out of the box. Customize with `/claude-lens:configure`.
+**Zero config required.** Sensible defaults out of the box.
+
+## Configure
+
+Edit `~/.config/claude-lens/config` (or `$CLAUDE_PLUGIN_DATA/config`):
+
+```ini
+# Preset: minimal | standard | full
+PRESET=standard
+
+# Module toggles (true/false)
+SHOW_COST=false
+SHOW_SPEED=true
+SHOW_TREND=true
+SHOW_USAGE=true
+```
+
+Changes take effect on the next statusline refresh (~300ms).
 
 ## vs claude-hud
 
