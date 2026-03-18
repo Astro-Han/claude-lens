@@ -2,10 +2,7 @@
 
 > A fast, lightweight statusline for Claude Code. Pure Bash + jq.
 
-```
-[Opus 4.6 (1M)] ~/my-project │ main 3f +12 -5 │ 15m 30s
-████░░░░░░ 38% of 200K↑ │ 5h: 62% +12% (1h30m) │ 7d: 35% +14% (2d 5h)
-```
+![claude-lens statusline](claude-lens-showcase.jpg)
 
 ## Install
 
