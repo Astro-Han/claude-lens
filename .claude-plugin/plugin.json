@@ -1,8 +1,0 @@
-{
-  "name": "claude-lens",
-  "description": "Fast statusline for Claude Code with pace tracking. Shows if you're burning quota too fast (green = headroom, red = slow down). Pure Bash + jq, ~33ms, zero config.",
-  "version": "0.3.1",
-  "author": {
-    "name": "yuhan"
-  }
-}
