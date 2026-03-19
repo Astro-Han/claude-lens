@@ -1,6 +1,6 @@
 # Claude Lens
 
-> Know if you're burning through your Claude Code quota too fast. Pure Bash + jq, 142 lines.
+> Know if you're burning through your Claude Code quota too fast. Pure Bash + jq, 158 lines.
 
 ![claude-lens statusline](.github/claude-lens-showcase.jpg)
 
