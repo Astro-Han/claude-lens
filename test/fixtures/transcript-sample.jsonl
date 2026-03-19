@@ -1,5 +1,0 @@
-{"type":"human","message":"Fix the auth bug"}
-{"type":"assistant","message":"I will look into the auth issue.","tool_calls":[{"name":"Read","status":"completed"},{"name":"Edit","status":"in_progress"}]}
-{"type":"assistant","message":"Let me also check the tests.","subagents":[{"name":"test-runner","status":"running"}]}
-{"type":"assistant","message":"Here is my progress:","todos":[{"content":"Fix login","status":"completed"},{"content":"Update tests","status":"in_progress"},{"content":"Deploy","status":"pending"}]}
-{"type":"assistant","message":"The fix is applied. Here is the summary of what I changed in the authentication module to resolve the login issue that was reported."}
