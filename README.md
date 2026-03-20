@@ -1,6 +1,6 @@
 # Claude Lens
 
-A lightweight statusline for Claude Code. ~150 lines of Bash + jq.
+A lightweight statusline for Claude Code. ~165 lines of Bash + jq.
 
 Other statuslines show how much you *used*. Claude Lens shows whether your *pace* is sustainable -- so you know to keep pushing or ease off before hitting a wall.
 
@@ -38,10 +38,11 @@ Claude Code polls the statusline every ~300ms, so speed matters:
 | Data | Source | Cache |
 |------|--------|-------|
 | Model, context, duration, cost | stdin JSON (single `jq` call) | None needed |
+| Quota (5h, 7d, pace) | stdin `rate_limits` (CC >= 2.1.80) | None needed (real-time) |
+| Quota fallback | Anthropic Usage API (CC < 2.1.80) | `/tmp`, 300s TTL, async background refresh |
 | Git branch + diff | `git` commands | `/tmp`, 5s TTL |
-| Quota (5h, 7d, extra usage) | Anthropic Usage API | `/tmp`, 300s TTL, async background refresh |
 
-Usage API calls happen in a background subshell -- the statusline never blocks on the network. If the API is unreachable, cached data stays visible until the next successful refresh.
+On Claude Code >= 2.1.80, usage data comes directly from stdin -- real-time, no network calls. On older versions, it falls back to the Usage API in a background subshell so the statusline never blocks.
 
 ## License
 
