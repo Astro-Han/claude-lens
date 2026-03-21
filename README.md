@@ -1,25 +1,20 @@
 # Claude Lens
 
-A statusline for Claude Code that just works. ~165 lines of Bash + jq -- nothing to break.
+Know your quota before you hit the wall. A statusline for Claude Code in ~165 lines of Bash + jq.
 
-No Node.js, no npm, no lock files, no cold-start crashes. Install in seconds, forget about it. It also tracks your quota *pace* -- green means headroom, red means slow down.
+Most statuslines show "you used 60%." That number means nothing without context. 60% with 4 hours left? Fine. 60% with 30 minutes left? You're about to hit the wall. claude-lens compares your usage rate to the time remaining and shows the delta. No Node.js, no npm, no lock files. Single Bash file.
 
-![claude-lens statusline](.github/claude-lens-showcase.png)
+![claude-lens showing 92% quota remaining with +17% pace delta](.github/claude-lens-showcase.png)
 
-Reading the screenshot:
-
-- **92%** remaining in the 5h window, **29%** remaining in the 7d window
-- **+17%** green = you've used 17% less than expected at this point. Headroom. Keep going.
-- **(3h)** = this window resets in 3 hours
-- Colors: green (>30% left), yellow (11-30%), red (<=10%)
-
-The top line shows model, effort, context size, project directory, and git branch with diff stats.
+- **+17%** green = you've used 17% less than expected. Headroom. Keep going.
+- **92%** / **29%** = remaining in the 5h and 7d windows. **(3h)** = resets in 3 hours.
+- Top line: model, effort, context %, project, git branch `+N -N`
 
 ## Install
 
 Requires `jq`.
 
-### Option A: Plugin (recommended)
+**Plugin (recommended):**
 
 ```
 /plugin marketplace add Astro-Han/claude-lens
@@ -27,7 +22,7 @@ Requires `jq`.
 /claude-lens:setup
 ```
 
-### Option B: Manual
+**Manual:**
 
 ```bash
 curl -o ~/.claude/statusline.sh \
@@ -37,13 +32,24 @@ chmod +x ~/.claude/statusline.sh
 claude config set statusLine.command ~/.claude/statusline.sh
 ```
 
-Restart Claude Code. That's it.
+Restart Claude Code. Done.
 
 To remove: `claude config set statusLine.command ""`
 
+## How It Compares
+
+|  | claude-lens | Node.js/TypeScript statuslines | Rust/Go statuslines |
+|---|---|---|---|
+| Runtime | `jq` | Node.js 18+ / npm | Compiled binary |
+| Codebase | ~165 lines, single file | 1000+ lines + node_modules | Compiled, not inspectable |
+| Failure modes | Read-only, worst case prints "Claude" | Runtime dependency, package manager | Generally stable |
+| Pace tracking | Usage rate vs time remaining | Trend-only or none | None |
+
+Need themes, powerline aesthetics, or TUI config? Try [ccstatusline](https://github.com/sirmalloc/ccstatusline). The entire source of claude-lens is [one file](claude-lens.sh). Read it.
+
 ## Under the Hood
 
-Claude Code polls the statusline every ~300ms, so speed matters:
+Claude Code polls the statusline every ~300ms:
 
 | Data | Source | Cache |
 |------|--------|-------|
@@ -52,7 +58,7 @@ Claude Code polls the statusline every ~300ms, so speed matters:
 | Quota fallback | Anthropic Usage API (CC < 2.1.80) | `/tmp`, 300s TTL, async background refresh |
 | Git branch + diff | `git` commands | `/tmp`, 5s TTL |
 
-On Claude Code >= 2.1.80, usage data comes directly from stdin -- real-time, no network calls. On older versions, it falls back to the Usage API in a background subshell so the statusline never blocks.
+On Claude Code >= 2.1.80, usage data comes directly from stdin. No network calls. On older versions, it falls back to the Usage API in a background subshell so the statusline never blocks.
 
 ## License
 
