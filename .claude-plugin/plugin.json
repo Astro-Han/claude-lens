@@ -1,7 +1,7 @@
 {
   "name": "claude-lens",
   "description": "A statusline for Claude Code that just works. ~165 lines of Bash + jq -- no Node.js, no npm, nothing to break. Tracks quota pace too.",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "author": {
     "name": "yuhan",
     "url": "https://github.com/Astro-Han"
