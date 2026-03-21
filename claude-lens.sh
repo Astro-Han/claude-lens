@@ -153,8 +153,7 @@ _rc() {
 }
 L2="${BC}${BAR}${N} ${PCT}% of ${CL}"
 L2+=" | 5h: $(_uf "$U5")$(_pace "$U5" "$RM5" 300)$(_rc "$RM5")"
-L2+=" | 7d: $(_uf "$U7")$(_pace "$U7" "$RM7" 10080)"
-[[ "$U7" =~ ^[0-9]+$ ]] && ((U7>=70)) && L2+="$(_rc "$RM7")"
+L2+=" | 7d: $(_uf "$U7")$(_pace "$U7" "$RM7" 10080)$(_rc "$RM7")"
 # Session cost: only for confirmed API users (no rate_limits + no OAuth cache)
 if [[ "$SHOW_COST" == "1" ]]; then
   printf -v _CS "\$%.2f" "$COST" 2>/dev/null
