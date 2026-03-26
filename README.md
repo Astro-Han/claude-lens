@@ -6,8 +6,8 @@ Most statuslines show "you used 60%." That number means nothing without context.
 
 ![claude-lens statusline demo](.github/claude-lens-demo.gif)
 
-- **+15%** green = you've used 15% less than expected. Headroom. Keep going.
-- **-15%** red = you're burning 15% faster than sustainable. Slow down.
+- **⇣15%** green = you've used 15% less than expected. Headroom. Keep going.
+- **⇡15%** red = you're burning 15% faster than sustainable. Slow down.
 - **15%** / **20%** = used in the 5h and 7d windows. **3h** = resets in 3 hours.
 - Top line: model, effort, project `(branch)`, `3f +24 -7` = git diff stats
 
