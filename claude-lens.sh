@@ -221,8 +221,8 @@ _usage() {
     if [[ "$rm" =~ ^[0-9]+$ ]] && ((rm <= w)); then
       # Pace delta: positive = over pace (overspend), negative = under pace (surplus).
       local d=$((u - (w - rm) * 100 / w))
-      ((d > 5)) && printf " ${R}⇡%d%%${N}" "$d"
-      ((d < -5)) && printf " ${G}⇣%d%%${N}" "${d#-}"
+      ((d > 0)) && printf " ${R}⇡%d%%${N}" "$d"
+      ((d < 0)) && printf " ${G}⇣%d%%${N}" "${d#-}"
     fi
   fi
   [[ "$rm" =~ ^[0-9]+$ ]] || return

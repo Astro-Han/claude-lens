@@ -93,6 +93,20 @@ echo "Test 10: long model truncation"
 OUTPUT=$(run '{"model":{"display_name":"claude-3-opus-20240229-extended"},"workspace":{"project_dir":"'"$PWD"'"},"context_window":{"used_percentage":25,"context_window_size":200000},"rate_limits":{"five_hour":{"used_percentage":20,"resets_at":'$((NOW + 14000))'},"seven_day":{"used_percentage":10,"resets_at":'$((NOW + 500000))'}}}')
 assert_aligned "| aligned for long model"
 
+# ── Test 11: Pace delta arrows (small values must show after threshold removal) ──
+echo "Test 11: pace delta"
+# 5h window=300min, resets_at=NOW+150min → expected=50%.
+# used=51 → d=+1 (⇡1%, minimum positive boundary)
+OUTPUT=$(run '{"model":{"display_name":"Opus 4.6 (1M context)"},"workspace":{"project_dir":"'"$PWD"'"},"context_window":{"used_percentage":20,"context_window_size":1000000},"rate_limits":{"five_hour":{"used_percentage":51,"resets_at":'$((NOW + 9000))'},"seven_day":{"used_percentage":50,"resets_at":'$((NOW + 302400))'}}}')
+assert_line "⇡1% shown for min overspend" 2 '5h 51% ⇡1%'
+# used=49 → d=-1 (⇣1%, minimum negative boundary)
+OUTPUT=$(run '{"model":{"display_name":"Opus 4.6 (1M context)"},"workspace":{"project_dir":"'"$PWD"'"},"context_window":{"used_percentage":20,"context_window_size":1000000},"rate_limits":{"five_hour":{"used_percentage":49,"resets_at":'$((NOW + 9000))'},"seven_day":{"used_percentage":50,"resets_at":'$((NOW + 302400))'}}}')
+assert_line "⇣1% shown for min surplus" 2 '5h 49% ⇣1%'
+# used=50 → d=0 (no arrow on 5h). 7d also d=0 so no arrow anywhere.
+# 7d window=10080min, resets_at=NOW+302400s=5040min → expected=(10080-5040)*100/10080=50
+OUTPUT=$(run '{"model":{"display_name":"Opus 4.6 (1M context)"},"workspace":{"project_dir":"'"$PWD"'"},"context_window":{"used_percentage":20,"context_window_size":1000000},"rate_limits":{"five_hour":{"used_percentage":50,"resets_at":'$((NOW + 9000))'},"seven_day":{"used_percentage":50,"resets_at":'$((NOW + 302400))'}}}')
+assert_line "no arrow at d=0" 2 '5h 50% [0-9]'
+
 # ── Summary ──
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
