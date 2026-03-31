@@ -18,8 +18,88 @@ command -v jq >/dev/null || {
 
 # ── Colors & Utilities ──
 # C=Cyan G=Green Y=Yellow R=Red D=Dim N=Normal (reset)
-C='\033[36m' G='\033[32m' Y='\033[33m' R='\033[31m' D='\033[2m' N='\033[0m'
+# Store real escape bytes so final output does not need echo -e interpretation.
+C=$'\033[36m' G=$'\033[32m' Y=$'\033[33m' R=$'\033[31m' D=$'\033[2m' N=$'\033[0m'
+# Cache records use ASCII Unit Separator so legal Git ref names cannot split
+# serialized fields and empty values survive round-trips through read.
+SEP=$'\037'
 NOW=$(date +%s)
+# Returns true when the candidate cache dir is a real directory owned by the
+# current user, writable, and not a symlink into a foreign-controlled path.
+_cache_dir_ok() { [ -d "$1" ] && [ ! -L "$1" ] && [ -O "$1" ] && [ -w "$1" ]; }
+# Reads one cache record into CACHE_FIELDS, supporting the current separator
+# and the legacy pipe format used by older cache files.
+_read_cache_record() {
+  local line="$1" delim rest field
+  CACHE_FIELDS=()
+  if [[ "$line" == *"$SEP"* ]]; then
+    delim="$SEP"
+  else
+    delim='|'
+  fi
+  rest="$line"
+  while [[ "$rest" == *"$delim"* ]]; do
+    field=${rest%%"$delim"*}
+    CACHE_FIELDS+=("$field")
+    rest=${rest#*"$delim"}
+  done
+  CACHE_FIELDS+=("$rest")
+}
+# Loads and parses one cache file into CACHE_FIELDS.
+_load_cache_record_file() {
+  local path="$1" line=""
+  [ -f "$path" ] || return 1
+  IFS= read -r line <"$path" || line=""
+  _read_cache_record "$line"
+}
+# Writes one cache record atomically. If mktemp fails, the caller skips the
+# cache update and keeps serving live data for this run.
+_write_cache_record() {
+  local path="$1" tmp dir
+  shift
+  dir=${path%/*}
+  tmp=$(mktemp "${dir}/claude-sl-tmp-XXXXXX" 2>/dev/null || true)
+  [ -n "$tmp" ] || return 1
+  (
+    IFS="$SEP"
+    printf '%s\n' "$*"
+  ) >"$tmp" && mv "$tmp" "$path"
+}
+# Computes remaining whole minutes until a future epoch. Missing or expired
+# timestamps return an empty string so callers can skip countdown formatting.
+_minutes_until() {
+  local epoch="$1" mins
+  [[ "$epoch" =~ ^[0-9]+$ ]] && ((epoch > 0)) || return
+  mins=$(((epoch - NOW) / 60))
+  ((mins < 0)) && mins=0
+  printf '%s\n' "$mins"
+}
+# Collects live Git metadata for DIR. On non-repos, leaves defaults in place
+# and returns non-zero so callers can decide whether to cache the empty result.
+_collect_git_info() {
+  BR="" FC=0 AD=0 DL=0
+  git -C "$DIR" rev-parse --git-dir >/dev/null 2>&1 || return 1
+  BR=$(git -C "$DIR" --no-optional-locks branch --show-current 2>/dev/null)
+  while IFS=$'\t' read -r a d _; do
+    # Skip binary files (reported as "-" instead of a number).
+    [[ "$a" =~ ^[0-9]+$ ]] || continue
+    FC=$((FC + 1))
+    AD=$((AD + a))
+    DL=$((DL + d))
+  done < <(git -C "$DIR" --no-optional-locks diff HEAD --numstat 2>/dev/null)
+}
+# Cache only inside a user-owned, non-symlinked directory. If no safe root is
+# available, disable caching for this run instead of falling back to shared /tmp.
+_CD="" CACHE_OK=0
+for _BASE in "${XDG_RUNTIME_DIR:-}" "${HOME}/.cache"; do
+  [ -n "$_BASE" ] || continue
+  _CAND="${_BASE%/}/claude-pace"
+  [ -e "$_CAND" ] || mkdir -p -m 700 "$_CAND" 2>/dev/null || continue
+  _cache_dir_ok "$_CAND" || continue
+  _CD="$_CAND"
+  CACHE_OK=1
+  break
+done
 # Returns true (exit 0) when file is missing or older than $2 seconds.
 _stale() { [ ! -f "$1" ] || [ $((NOW - $(stat -f%m "$1" 2>/dev/null || stat -c%Y "$1" 2>/dev/null || echo 0))) -gt "$2" ]; }
 
@@ -66,26 +146,28 @@ for ((i = F; i < 10; i++)); do BAR+='░'; done
 # ── Git Info (5s cache, atomic write) ──
 # Cache key encodes DIR so concurrent sessions in different repos don't clash.
 # Atomic write: write to a temp file first, then mv to avoid partial reads.
-GC="/tmp/claude-sl-git-${DIR//[^a-zA-Z0-9]/_}"
-if _stale "$GC" 5; then
-  if git -C "$DIR" rev-parse --git-dir >/dev/null 2>&1; then
-    _BR=$(git -C "$DIR" --no-optional-locks branch --show-current 2>/dev/null)
-    _FC=0 _AD=0 _DL=0
-    while IFS=$'\t' read -r a d _; do
-      # Skip binary files (reported as "-" instead of a number).
-      [[ "$a" =~ ^[0-9]+$ ]] && {
-        _FC=$((_FC + 1))
-        _AD=$((_AD + a))
-        _DL=$((_DL + d))
-      }
-    done < <(git -C "$DIR" --no-optional-locks diff HEAD --numstat 2>/dev/null)
-    _TMP=$(mktemp /tmp/claude-sl-g-XXXXXX)
-    echo "${_BR}|${_FC}|${_AD}|${_DL}" >"$_TMP" && mv "$_TMP" "$GC"
-  else
-    echo "|||" >"$GC"
+BR="" FC=0 AD=0 DL=0
+if [[ "$CACHE_OK" == "1" ]]; then
+  GC="${_CD}/claude-sl-git-${DIR//[^a-zA-Z0-9]/_}"
+  if _stale "$GC" 5; then
+    if _collect_git_info; then
+      _write_cache_record "$GC" "$BR" "$FC" "$AD" "$DL"
+    else
+      _write_cache_record "$GC" "" "" "" ""
+    fi
+  elif _load_cache_record_file "$GC"; then
+    BR=${CACHE_FIELDS[0]:-}
+    FC=${CACHE_FIELDS[1]:-}
+    AD=${CACHE_FIELDS[2]:-}
+    DL=${CACHE_FIELDS[3]:-}
   fi
+  # Reject cache corruption before arithmetic or terminal output formatting.
+  [[ "$FC" =~ ^[0-9]+$ ]] || FC=0
+  [[ "$AD" =~ ^[0-9]+$ ]] || AD=0
+  [[ "$DL" =~ ^[0-9]+$ ]] || DL=0
+else
+  _collect_git_info || true
 fi
-IFS='|' read -r BR FC AD DL <"$GC" 2>/dev/null
 
 # ── Project Name + Line 1 Right Section ──
 # Extract project name. Worktree: save repo name explicitly.
@@ -116,20 +198,16 @@ SHOW_COST=0
 if [[ "$HAS_RL" == "1" ]]; then
   # Stdin path: real-time, no network. U5/U7 already set by jq read above.
   # Guard: resets_at=0 means field missing, leave RM empty so _pace/_rc skip it
-  RM5=""
-  ((R5 > 0)) && {
-    RM5=$(((R5 - NOW) / 60))
-    ((RM5 < 0)) && RM5=0
-  }
-  RM7=""
-  ((R7 > 0)) && {
-    RM7=$(((R7 - NOW) / 60))
-    ((RM7 < 0)) && RM7=0
-  }
+  RM5=$(_minutes_until "$R5")
+  RM7=$(_minutes_until "$R7")
   # Extra usage (XO/XU/XL) only available via API fallback; stdin lacks this data
 else
   # ── API fallback (remove when CC <2.1.80 no longer supported) ──
-  UC="/tmp/claude-sl-usage" UL="/tmp/claude-sl-usage.lock"
+  UC="" UL=""
+  [[ "$CACHE_OK" == "1" ]] && {
+    UC="${_CD}/claude-sl-usage"
+    UL="${_CD}/claude-sl-usage.lock"
+  }
 
   # ── _get_token: credential source priority ──
   # Check in order: env var → macOS Keychain → credentials file → secret-tool (Linux).
@@ -147,32 +225,39 @@ else
     [ -n "$b" ] && jq -r '.claudeAiOauth.accessToken//empty' <<<"$b" 2>/dev/null
   }
 
+  # ── _fetch_usage_api: direct API read into usage globals ──
+  # Used by both the cached background refresh path and the no-cache fallback.
+  _fetch_usage_api() {
+    local tk resp
+    tk=$(_get_token)
+    [ -n "$tk" ] || return 1
+    resp=$(curl -s --max-time 3 \
+      -H "Authorization: Bearer $tk" -H "anthropic-beta: oauth-2025-04-20" \
+      -H "Content-Type: application/json" \
+      "https://api.anthropic.com/api/oauth/usage" 2>/dev/null)
+    IFS=$'\t' read -r U5 U7 XO XU XL RM5 RM7 < <(jq -r '
+      def rmins: if . and . != "" then (sub("\\.[0-9]+"; "") | sub("\\+00:00$"; "Z") | fromdateiso8601) - (now|floor) | ./60|floor | if .<0 then 0 else . end else null end;
+      [(.five_hour.utilization|floor),(.seven_day.utilization|floor),
+        (if .extra_usage.is_enabled then 1 else 0 end),
+        (.extra_usage.used_credits//0|floor),(.extra_usage.monthly_limit//0|floor),
+        (.five_hour.resets_at|rmins//""),(.seven_day.resets_at|rmins//"")]|@tsv' \
+      <<<"$resp" 2>/dev/null) || return 1
+  }
+
   # ── _fetch_usage: background stale-while-revalidate fetch ──
   # Runs in a subshell (&) so the main process returns immediately with cached data.
-  # On API failure, touches the cache file to reset the 300s TTL and avoid a
-  # retry storm; placeholder "--" values leave the display unchanged.
+  # On API failure, writes placeholder values once so the UI stays stable and
+  # avoids repeated refresh attempts until the cache TTL expires.
   _fetch_usage() {
     (
       trap 'rm -f "$UL"' EXIT
-      TK=$(_get_token)
-      [ -z "$TK" ] && return
-      RESP=$(curl -s --max-time 3 \
-        -H "Authorization: Bearer $TK" -H "anthropic-beta: oauth-2025-04-20" \
-        -H "Content-Type: application/json" \
-        "https://api.anthropic.com/api/oauth/usage" 2>/dev/null)
-      IFS=$'\t' read -r F5 S7 EX EU EL RM5 RM7 < <(jq -r '
-        def rmins: if . and . != "" then (sub("\\.[0-9]+"; "") | sub("\\+00:00$"; "Z") | fromdateiso8601) - (now|floor) | ./60|floor | if .<0 then 0 else . end else null end;
-        [(.five_hour.utilization|floor),(.seven_day.utilization|floor),
-          (if .extra_usage.is_enabled then 1 else 0 end),
-          (.extra_usage.used_credits//0|floor),(.extra_usage.monthly_limit//0|floor),
-          (.five_hour.resets_at|rmins//""),(.seven_day.resets_at|rmins//"")]|@tsv' \
-        <<<"$RESP" 2>/dev/null) || {
-        [ ! -f "$UC" ] || [[ $(head -c2 "$UC") == -- ]] && echo "--|--|0|0|0||" >"$UC"
-        touch "$UC"
-        return
-      }
-      TMP=$(mktemp /tmp/claude-sl-u-XXXXXX)
-      echo "${F5}|${S7}|${EX}|${EU}|${EL}|${RM5}|${RM7}" >"$TMP" && mv "$TMP" "$UC"
+      if _fetch_usage_api; then
+        _write_cache_record "$UC" "$U5" "$U7" "$XO" "$XU" "$XL" "$RM5" "$RM7"
+      else
+        if [ ! -f "$UC" ] || [[ $(head -c2 "$UC") == -- ]]; then
+          _write_cache_record "$UC" "--" "--" "0" "0" "0" "" ""
+        fi
+      fi
     ) &
   }
 
@@ -180,7 +265,7 @@ else
   # `set -o noclobber` makes `>` fail atomically if the file already exists,
   # providing a lock without external tools. The stale-lock check (10s) ensures
   # a crashed worker can't block refreshes indefinitely.
-  if _stale "$UC" 300; then
+  if [[ "$CACHE_OK" == "1" ]] && _stale "$UC" 300; then
     if (
       set -o noclobber
       echo $$ >"$UL"
@@ -200,18 +285,34 @@ else
   # (in whole minutes) since the file was written to keep the countdown accurate
   # between 300s refresh cycles without a network call.
   U5="--" U7="--" XO=0 XU=0 XL=0 RM5="" RM7=""
-  [ -f "$UC" ] && IFS='|' read -r U5 U7 XO XU XL RM5 RM7 <"$UC"
-  U5=${U5%%.*} U7=${U7%%.*} XU=${XU%%.*} XL=${XL%%.*}
-  if [[ "$RM5" =~ ^[0-9]+$ ]] && [ -f "$UC" ]; then
-    _CA=$((NOW - $(stat -f%m "$UC" 2>/dev/null || stat -c%Y "$UC" 2>/dev/null || echo "$NOW")))
-    RM5=$((RM5 - _CA / 60))
-    ((RM5 < 0)) && RM5=0
-    [[ "$RM7" =~ ^[0-9]+$ ]] && {
-      RM7=$((RM7 - _CA / 60))
-      ((RM7 < 0)) && RM7=0
-    }
+  if [[ "$CACHE_OK" == "1" ]]; then
+    if _load_cache_record_file "$UC"; then
+      U5=${CACHE_FIELDS[0]:---}
+      U7=${CACHE_FIELDS[1]:---}
+      XO=${CACHE_FIELDS[2]:-0}
+      XU=${CACHE_FIELDS[3]:-0}
+      XL=${CACHE_FIELDS[4]:-0}
+      RM5=${CACHE_FIELDS[5]:-}
+      RM7=${CACHE_FIELDS[6]:-}
+    fi
+    if [[ "$RM5" =~ ^[0-9]+$ ]] && [ -f "$UC" ]; then
+      _CA=$((NOW - $(stat -f%m "$UC" 2>/dev/null || stat -c%Y "$UC" 2>/dev/null || echo "$NOW")))
+      RM5=$((RM5 - _CA / 60))
+      ((RM5 < 0)) && RM5=0
+      [[ "$RM7" =~ ^[0-9]+$ ]] && {
+        RM7=$((RM7 - _CA / 60))
+        ((RM7 < 0)) && RM7=0
+      }
+    fi
+    [ ! -f "$UC" ] && SHOW_COST=1
+  elif ! _fetch_usage_api; then
+    SHOW_COST=1
   fi
-  [ ! -f "$UC" ] && SHOW_COST=1
+  U5=${U5%%.*} U7=${U7%%.*} XU=${XU%%.*} XL=${XL%%.*}
+  # Reject cache corruption or malformed API data before arithmetic formatting.
+  [[ "$XO" =~ ^[01]$ ]] || XO=0
+  [[ "$XU" =~ ^[0-9]+$ ]] || XU=0
+  [[ "$XL" =~ ^[0-9]+$ ]] || XL=0
   # ── End API fallback ──
 fi
 
@@ -265,11 +366,11 @@ L2="${BC}${BAR}${N} ${PCT}% ${CL}${PAD2} ${D}|${N}  5h $(_usage "$U5" "$RM5" 300
 # Extra usage: only when enabled and has actual spending (API fallback only)
 [ "$XO" = 1 ] && ((XU > 0)) &&
   printf -v _XS "  ${Y}\$%d.%02d${N}/\$%d.%02d" $((XU / 100)) $((XU % 100)) $((XL / 100)) $((XL % 100)) && L2+="$_XS"
-# Session cost: only when /tmp/claude-sl-usage does not exist
+# Session cost: only when this run has no readable usage cache data.
 if [[ "$SHOW_COST" == "1" ]]; then
   printf -v _CS "\$%.2f" "$COST" 2>/dev/null
   [[ "$_CS" != "\$0.00" ]] && L2+="  $_CS"
 fi
 
-echo -e "$L1"
-echo -e "$L2"
+printf '%s\n' "$L1"
+printf '%s\n' "$L2"
