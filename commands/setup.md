@@ -1,11 +1,11 @@
 ---
-description: Install and configure claude-lens statusline
+description: Install and configure claude-pace statusline
 allowed-tools: Bash, Read, Write, Edit
 ---
 
-# claude-lens Setup
+# claude-pace Setup
 
-You are setting up claude-lens, a lightweight statusline for Claude Code.
+You are setting up claude-pace, a lightweight statusline for Claude Code.
 
 Follow these steps in order. If any step fails, stop and explain the issue to the user.
 
@@ -17,16 +17,16 @@ If jq is not found, tell the user to install it (`brew install jq` on macOS, `ap
 
 ## Step 2: Determine plugin install path
 
-The plugin was installed via the Claude Code plugin system. Find the claude-lens.sh script within the plugin cache.
+The plugin was installed via the Claude Code plugin system. Find the claude-pace.sh script within the plugin cache.
 
-Run: `find ~/.claude/plugins/cache -path "*/claude-lens/*/claude-lens.sh" 2>/dev/null | head -1`
+Run: `find ~/.claude/plugins/cache -path "*/claude-pace/*/claude-pace.sh" 2>/dev/null | head -1`
 
 If found, save that path as SCRIPT_PATH.
 
 If not found, fall back to downloading:
 ```bash
 curl -fsSL -o ~/.claude/statusline.sh \
-  https://raw.githubusercontent.com/Astro-Han/claude-lens/main/claude-lens.sh
+  https://raw.githubusercontent.com/Astro-Han/claude-pace/main/claude-pace.sh
 chmod +x ~/.claude/statusline.sh
 ```
 Set SCRIPT_PATH to `~/.claude/statusline.sh`.
@@ -52,6 +52,6 @@ If `statusLine` already exists, update the `command` value. If it does not exist
 
 Tell the user:
 
-- claude-lens has been configured successfully.
+- claude-pace has been configured successfully.
 - Restart Claude Code (or start a new session) to see the statusline.
 - To remove later: delete the `statusLine` block from `~/.claude/settings.json`.

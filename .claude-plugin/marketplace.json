@@ -1,16 +1,16 @@
 {
-  "name": "claude-lens-marketplace",
+  "name": "claude-pace-marketplace",
   "owner": {
     "name": "yuhan",
     "email": "lei.yuhan@outlook.com"
   },
   "metadata": {
-    "description": "Claude Lens statusline plugin marketplace",
+    "description": "Claude Pace statusline plugin marketplace",
     "version": "0.6.0"
   },
   "plugins": [
     {
-      "name": "claude-lens",
+      "name": "claude-pace",
       "source": "./",
       "description": "Lightweight statusline with quota pace tracking. Pure Bash + jq.",
       "category": "monitoring",

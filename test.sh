@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Regression tests for claude-lens statusline
+# Regression tests for claude-pace statusline
 # Usage: bash test.sh
 set -euo pipefail
 
@@ -37,7 +37,8 @@ assert_aligned() {
 }
 
 NOW=$(date +%s)
-run() { echo "$1" | bash claude-lens.sh 2>/dev/null | strip_ansi; }
+REPO_NAME=$(basename "$PWD")
+run() { echo "$1" | bash claude-pace.sh 2>/dev/null | strip_ansi; }
 
 # ── Test 1: MODEL_SHORT strips "(1M context)" → "(1M)" ──
 echo "Test 1: MODEL_SHORT"
@@ -59,7 +60,7 @@ assert_line "no (0K) in model" 1 '^Opus 4\.6 [^(]'
 echo "Test 4: branch format"
 OUTPUT=$(run '{"model":{"display_name":"Opus 4.6 (1M context)"},"workspace":{"project_dir":"'"$PWD"'"},"context_window":{"used_percentage":16,"context_window_size":1000000},"rate_limits":{"five_hour":{"used_percentage":17,"resets_at":'$((NOW + 2580))'},"seven_day":{"used_percentage":21,"resets_at":'$((NOW + 345600))'}}}')
 assert_line "branch in parens (main)" 1 '\(main\)'
-assert_line "project name only" 1 'claude-lens'
+assert_line "project name only" 1 "$REPO_NAME"
 
 # ── Test 5: Pipe alignment ──
 echo "Test 5: pipe alignment"
@@ -85,8 +86,8 @@ assert_aligned "| aligned at 100%"
 
 # ── Test 9: Worktree path ──
 echo "Test 9: worktree"
-OUTPUT=$(run '{"model":{"display_name":"Opus 4.6 (1M context)"},"workspace":{"project_dir":"'"$HOME"'/workspace/dev/claude-lens/.claude/worktrees/fix-auth"},"context_window":{"used_percentage":20,"context_window_size":1000000},"rate_limits":{"five_hour":{"used_percentage":30,"resets_at":'$((NOW + 12000))'},"seven_day":{"used_percentage":15,"resets_at":'$((NOW + 500000))'}}}')
-assert_line "worktree shows repo name" 1 'claude-lens'
+OUTPUT=$(run '{"model":{"display_name":"Opus 4.6 (1M context)"},"workspace":{"project_dir":"'"$PWD"'/.claude/worktrees/fix-auth"},"context_window":{"used_percentage":20,"context_window_size":1000000},"rate_limits":{"five_hour":{"used_percentage":30,"resets_at":'$((NOW + 12000))'},"seven_day":{"used_percentage":15,"resets_at":'$((NOW + 500000))'}}}')
+assert_line "worktree shows repo name" 1 "$REPO_NAME"
 
 # ── Test 10: Long model name truncation ──
 echo "Test 10: long model truncation"

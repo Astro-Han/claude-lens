@@ -1,5 +1,5 @@
 {
-  "name": "claude-lens",
+  "name": "claude-pace",
   "description": "A statusline for Claude Code that just works. Single file of Bash + jq -- no Node.js, no npm, nothing to break. Tracks quota pace too.",
   "version": "0.6.2",
   "author": {
@@ -9,8 +9,8 @@
   "commands": [
     "./commands/setup.md"
   ],
-  "homepage": "https://github.com/Astro-Han/claude-lens",
-  "repository": "https://github.com/Astro-Han/claude-lens",
+  "homepage": "https://github.com/Astro-Han/claude-pace",
+  "repository": "https://github.com/Astro-Han/claude-pace",
   "license": "MIT",
   "keywords": [
     "statusline",
