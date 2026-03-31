@@ -1,0 +1,32 @@
+{
+  "name": "claude-pace",
+  "version": "0.6.2",
+  "description": "A statusline for Claude Code. Pure Bash + jq, single file.",
+  "bin": {
+    "claude-pace": "cli.js"
+  },
+  "files": [
+    "cli.js",
+    "claude-pace.sh"
+  ],
+  "author": "Yuhan Lei (https://github.com/Astro-Han)",
+  "scripts": {
+    "prepublishOnly": "cp ../claude-pace.sh . && cp ../README.md ."
+  },
+  "keywords": [
+    "claude-code",
+    "statusline",
+    "quota",
+    "usage",
+    "pace-tracking",
+    "bash"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Astro-Han/claude-pace"
+  },
+  "engines": {
+    "node": ">=16"
+  }
+}
