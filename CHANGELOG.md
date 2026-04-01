@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.3
+
+- API fallback can now be disabled: set `CLAUDE_PACE_API_FALLBACK=0` to turn off usage polling for CC <2.1.80
+- Fix git cache key collision: paths like `/foo-bar` and `/foo/bar` no longer share a cache file (now uses SHA-1 hash)
+- Old-style git cache files (path-based names like `claude-sl-git-_Users_*`) are orphaned; safe to delete from your cache directory (`$XDG_RUNTIME_DIR/claude-pace/` or `~/.cache/claude-pace/`)
+
 ## 0.7.2
 
 - Fix OAuth token exposure in Usage API fallback: avoid leaking bearer token in curl argv / process listings

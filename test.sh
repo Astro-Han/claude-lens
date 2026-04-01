@@ -7,6 +7,7 @@ PASS=0 FAIL=0
 strip_ansi() { perl -pe 's/\e\[[0-9;]*m//g'; }
 TEST_TMP=$(mktemp -d)
 USAGE_ARITH_MARKER="/tmp/claudepaceusagearith$$"
+# shellcheck disable=SC2329  # invoked indirectly via trap
 cleanup_test_artifacts() {
   rm -f "$USAGE_ARITH_MARKER"
   rm -rf "$TEST_TMP"
@@ -75,7 +76,7 @@ run() { echo "$1" | bash claude-pace.sh 2>/dev/null | strip_ansi; }
 invoke_with_env() {
   local home_dir="$1" runtime_dir="$2" input="$3"
   env HOME="$home_dir" XDG_RUNTIME_DIR="$runtime_dir" USER=tester PATH="$PATH" \
-    bash claude-pace.sh 2>/dev/null <<<"$input"
+    CLAUDE_PACE_API_FALLBACK=1 bash claude-pace.sh 2>/dev/null <<<"$input"
 }
 run_with_env() {
   invoke_with_env "$1" "$2" "$3" | strip_ansi
@@ -86,12 +87,12 @@ run_side_effect_with_env() {
 invoke_with_env_and_path() {
   local home_dir="$1" runtime_dir="$2" path_dir="$3" input="$4"
   env HOME="$home_dir" XDG_RUNTIME_DIR="$runtime_dir" USER=tester PATH="$path_dir:$PATH" \
-    CLAUDE_CODE_OAUTH_TOKEN=fake-token bash claude-pace.sh 2>/dev/null <<<"$input"
+    CLAUDE_PACE_API_FALLBACK=1 CLAUDE_CODE_OAUTH_TOKEN=fake-token bash claude-pace.sh 2>/dev/null <<<"$input"
 }
 invoke_with_env_and_path_and_token() {
   local home_dir="$1" runtime_dir="$2" path_dir="$3" token="$4" input="$5"
   env HOME="$home_dir" XDG_RUNTIME_DIR="$runtime_dir" USER=tester PATH="$path_dir:$PATH" \
-    CLAUDE_CODE_OAUTH_TOKEN="$token" bash claude-pace.sh 2>/dev/null <<<"$input"
+    CLAUDE_PACE_API_FALLBACK=1 CLAUDE_CODE_OAUTH_TOKEN="$token" bash claude-pace.sh 2>/dev/null <<<"$input"
 }
 run_with_env_and_path() {
   invoke_with_env_and_path "$1" "$2" "$3" "$4" | strip_ansi
@@ -103,9 +104,10 @@ run_side_effect_with_env_and_path_and_token() {
   invoke_with_env_and_path_and_token "$1" "$2" "$3" "$4" "$5" >/dev/null
 }
 
+_hash_dir() { printf '%s' "$1" | { shasum 2>/dev/null || sha1sum; } | cut -c1-16; }
 git_cache_path_for_dir() {
   local dir="$1"
-  printf '/tmp/claude-sl-git-%s\n' "${dir//[^a-zA-Z0-9]/_}"
+  printf '/tmp/claude-sl-git-%s\n' "$(_hash_dir "$dir")"
 }
 
 init_test_repo() {
@@ -194,7 +196,7 @@ INJECT_RUNTIME="$TEST_TMP/inject-runtime"
 INJECT_DIR="$TEST_TMP/non-git-escape"
 INJECT_CACHE_ROOT="$INJECT_RUNTIME/claude-pace"
 mkdir -p "$INJECT_HOME" "$INJECT_RUNTIME" "$INJECT_DIR" "$INJECT_CACHE_ROOT"
-GC="$INJECT_CACHE_ROOT/claude-sl-git-${INJECT_DIR//[^a-zA-Z0-9]/_}"
+GC="$INJECT_CACHE_ROOT/claude-sl-git-$(_hash_dir "$INJECT_DIR")"
 printf 'feature\\nPWN|0|0|0\n' >"$GC"
 OUTPUT=$(run_with_env "$INJECT_HOME" "$INJECT_RUNTIME" '{"model":{"display_name":"Opus 4.6"},"workspace":{"project_dir":"'"$INJECT_DIR"'"},"context_window":{"used_percentage":20,"context_window_size":200000},"rate_limits":{"five_hour":{"used_percentage":30,"resets_at":'"$((NOW + 12000))"'},"seven_day":{"used_percentage":15,"resets_at":'"$((NOW + 500000))"'}}}')
 assert_line_count "branch cache keeps output to two lines" 2
@@ -206,7 +208,7 @@ INJECT_GIT_RUNTIME="$TEST_TMP/non-git-arith-runtime"
 INJECT_GIT_DIR="$TEST_TMP/non-git-arith"
 INJECT_GIT_CACHE_ROOT="$INJECT_GIT_RUNTIME/claude-pace"
 mkdir -p "$INJECT_GIT_HOME" "$INJECT_GIT_RUNTIME" "$INJECT_GIT_DIR" "$INJECT_GIT_CACHE_ROOT"
-GC="$INJECT_GIT_CACHE_ROOT/claude-sl-git-${INJECT_GIT_DIR//[^a-zA-Z0-9]/_}"
+GC="$INJECT_GIT_CACHE_ROOT/claude-sl-git-$(_hash_dir "$INJECT_GIT_DIR")"
 GIT_MARKER="$TEST_TMP/git-arith-marker"
 FC_PAYLOAD="a[\$(printf git >$GIT_MARKER)]"
 printf 'main|%s|0|0\n' "$FC_PAYLOAD" >"$GC"
@@ -269,7 +271,7 @@ SYMLINK_PROJECT="$TEST_TMP/symlink-project"
 SYMLINK_CACHE_ROOT="$SYMLINK_RUNTIME/claude-pace"
 SYMLINK_TARGET="$TEST_TMP/git-fallback-target"
 mkdir -p "$SYMLINK_HOME" "$SYMLINK_RUNTIME" "$SYMLINK_PROJECT" "$SYMLINK_CACHE_ROOT"
-GC="$SYMLINK_CACHE_ROOT/claude-sl-git-${SYMLINK_PROJECT//[^a-zA-Z0-9]/_}"
+GC="$SYMLINK_CACHE_ROOT/claude-sl-git-$(_hash_dir "$SYMLINK_PROJECT")"
 ln -s "$SYMLINK_TARGET" "$GC"
 run_side_effect_with_env "$SYMLINK_HOME" "$SYMLINK_RUNTIME" '{"model":{"display_name":"Opus 4.6"},"workspace":{"project_dir":"'"$SYMLINK_PROJECT"'"},"context_window":{"used_percentage":20,"context_window_size":200000},"rate_limits":{"five_hour":{"used_percentage":30,"resets_at":'"$((NOW + 12000))"'},"seven_day":{"used_percentage":15,"resets_at":'"$((NOW + 500000))"'}}}'
 assert_missing_path "git fallback leaves symlink target untouched" "$SYMLINK_TARGET"
@@ -383,6 +385,51 @@ chmod +x "$TOKEN_TRAILING_BIN/curl"
 TRAILING_BAD_TOKEN=$'bad-token\n'
 run_side_effect_with_env_and_path_and_token "/dev/null" "" "$TOKEN_TRAILING_BIN" "$TRAILING_BAD_TOKEN" '{"model":{"display_name":"Opus 4.6"},"workspace":{"project_dir":"'"$PWD"'"},"context_window":{"used_percentage":20,"context_window_size":200000},"cost":{"total_cost_usd":1.23}}'
 assert_missing_path "trailing newline token does not invoke curl" "$TOKEN_TRAILING_MARKER"
+
+# ── Test 23: API fallback can be disabled via CLAUDE_PACE_API_FALLBACK=0 ──
+echo "Test 23: API fallback opt-out via env var"
+OPTOUT_BIN="$TEST_TMP/optout-bin"
+OPTOUT_MARKER="$TEST_TMP/optout-marker"
+mkdir -p "$OPTOUT_BIN"
+cat >"$OPTOUT_BIN/curl" <<EOF
+#!/usr/bin/env bash
+printf 'called\n' >"$OPTOUT_MARKER"
+printf 'not-json\n'
+EOF
+chmod +x "$OPTOUT_BIN/curl"
+# Invoke with CLAUDE_PACE_API_FALLBACK=0 — should not call curl, should show cost
+OUTPUT=$(env HOME="/dev/null" XDG_RUNTIME_DIR="" USER=tester PATH="$OPTOUT_BIN:$PATH" \
+  CLAUDE_PACE_API_FALLBACK=0 CLAUDE_CODE_OAUTH_TOKEN=fake-token \
+  bash claude-pace.sh 2>/dev/null <<<"$(
+    cat <<JSON
+{"model":{"display_name":"Opus 4.6"},"workspace":{"project_dir":"$PWD"},"context_window":{"used_percentage":20,"context_window_size":200000},"cost":{"total_cost_usd":1.23}}
+JSON
+  )" | strip_ansi)
+assert_missing_path "curl not invoked when API fallback disabled" "$OPTOUT_MARKER"
+# shellcheck disable=SC2016  # single quotes intentional: regex pattern, not expansion
+assert_line "session cost shown when API fallback disabled" 2 '\$1\.23'
+
+# ── Test 24: Hash cache key prevents old-style path collisions ──
+echo "Test 24: hash cache key collision resistance"
+COLL_HOME="$TEST_TMP/coll-home"
+COLL_RUNTIME="$TEST_TMP/coll-runtime"
+COLL_CACHE_ROOT="$COLL_RUNTIME/claude-pace"
+mkdir -p "$COLL_HOME" "$COLL_RUNTIME" "$COLL_CACHE_ROOT"
+# These two dirs would collide under the old ${DIR//[^a-zA-Z0-9]/_} scheme
+DIR_A="$TEST_TMP/coll-a/b"
+DIR_B="$TEST_TMP/coll-a-b"
+mkdir -p "$DIR_A" "$DIR_B"
+HASH_A=$(_hash_dir "$DIR_A")
+HASH_B=$(_hash_dir "$DIR_B")
+if [[ "$HASH_A" != "$HASH_B" ]]; then
+  PASS=$((PASS + 1))
+  echo "  PASS: different dirs produce different cache keys"
+else
+  FAIL=$((FAIL + 1))
+  echo "  FAIL: different dirs produce different cache keys"
+  echo "    dir_a=$DIR_A hash=$HASH_A"
+  echo "    dir_b=$DIR_B hash=$HASH_B"
+fi
 
 # ── Summary ──
 echo ""

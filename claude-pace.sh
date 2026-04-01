@@ -94,6 +94,7 @@ _CD="" CACHE_OK=0
 for _BASE in "${XDG_RUNTIME_DIR:-}" "${HOME}/.cache"; do
   [ -n "$_BASE" ] || continue
   _CAND="${_BASE%/}/claude-pace"
+  # shellcheck disable=SC2174  # -p only creates leaf here; parent already exists
   [ -e "$_CAND" ] || mkdir -p -m 700 "$_CAND" 2>/dev/null || continue
   _cache_dir_ok "$_CAND" || continue
   _CD="$_CAND"
@@ -148,7 +149,7 @@ for ((i = F; i < 10; i++)); do BAR+='░'; done
 # Atomic write: write to a temp file first, then mv to avoid partial reads.
 BR="" FC=0 AD=0 DL=0
 if [[ "$CACHE_OK" == "1" ]]; then
-  GC="${_CD}/claude-sl-git-${DIR//[^a-zA-Z0-9]/_}"
+  GC="${_CD}/claude-sl-git-$(printf '%s' "$DIR" | { shasum 2>/dev/null || sha1sum; } | cut -c1-16)"
   if _stale "$GC" 5; then
     if _collect_git_info; then
       _write_cache_record "$GC" "$BR" "$FC" "$AD" "$DL"
@@ -201,8 +202,8 @@ if [[ "$HAS_RL" == "1" ]]; then
   RM5=$(_minutes_until "$R5")
   RM7=$(_minutes_until "$R7")
   # Extra usage (XO/XU/XL) only available via API fallback; stdin lacks this data
-else
-  # ── API fallback (remove when CC <2.1.80 no longer supported) ──
+elif [[ "${CLAUDE_PACE_API_FALLBACK:-1}" != "0" ]]; then
+  # ── API fallback (disable via CLAUDE_PACE_API_FALLBACK=0) ──
   UC="" UL=""
   [[ "$CACHE_OK" == "1" ]] && {
     UC="${_CD}/claude-sl-usage"
@@ -241,9 +242,11 @@ else
     # Feed headers through process substitution so the bearer token stays out
     # of curl argv while preserving literal bytes like quotes and backslashes.
     resp=$(curl -s --max-time 3 \
-      -H @<(printf 'Authorization: Bearer %s\n' "$tk"
+      -H @<(
+        printf 'Authorization: Bearer %s\n' "$tk"
         printf '%s\n' 'anthropic-beta: oauth-2025-04-20'
-        printf '%s\n' 'Content-Type: application/json') \
+        printf '%s\n' 'Content-Type: application/json'
+      ) \
       "https://api.anthropic.com/api/oauth/usage" 2>/dev/null)
     IFS=$'\t' read -r U5 U7 XO XU XL RM5 RM7 < <(jq -r '
       def rmins: if . and . != "" then (sub("\\.[0-9]+"; "") | sub("\\+00:00$"; "Z") | fromdateiso8601) - (now|floor) | ./60|floor | if .<0 then 0 else . end else null end;
@@ -324,6 +327,9 @@ else
   [[ "$XU" =~ ^[0-9]+$ ]] || XU=0
   [[ "$XL" =~ ^[0-9]+$ ]] || XL=0
   # ── End API fallback ──
+else
+  # No stdin rate_limits and API fallback not enabled; show session cost only.
+  SHOW_COST=1
 fi
 
 # Combined usage formatter: used% [pace delta] (countdown)

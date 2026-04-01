@@ -1,7 +1,7 @@
 {
   "name": "claude-pace",
   "description": "A statusline for Claude Code that just works. Single file of Bash + jq -- no Node.js, no npm, nothing to break. Tracks quota pace too.",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "author": {
     "name": "yuhan",
     "url": "https://github.com/Astro-Han"
