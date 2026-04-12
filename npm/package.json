@@ -1,7 +1,7 @@
 {
   "name": "claude-pace",
   "version": "0.8.0",
-  "description": "A statusline for Claude Code. Pure Bash + jq, single file.",
+  "description": "Claude Code statusline and rate limit tracker. Pure Bash + jq, single file.",
   "bin": {
     "claude-pace": "cli.js"
   },
@@ -15,11 +15,18 @@
   },
   "keywords": [
     "claude-code",
+    "claude-code-statusline",
+    "claude-code-plugin",
     "statusline",
+    "status-line",
+    "rate-limit-tracker",
     "quota",
+    "quota-tracker",
     "usage",
+    "usage-monitor",
     "pace-tracking",
-    "bash"
+    "bash",
+    "jq"
   ],
   "license": "MIT",
   "repository": {

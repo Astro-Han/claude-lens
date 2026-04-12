@@ -1,17 +1,39 @@
 # Claude Pace
 
-A lightweight status line for Claude Code that tracks your 5-hour and 7-day rate limit usage in real time. Pure Bash + jq, single file, zero npm.
+A lightweight Claude Code status line and rate limit tracker that shows your 5-hour and 7-day quota usage in real time. Pure Bash + jq, single file, zero npm.
 
-Most statuslines show "you used 60%." That number means nothing without context. 60% with 30 minutes left? Fine, the window resets soon. 60% with 4 hours left? You're about to hit the wall. claude-pace compares your burn rate to the time remaining and shows the delta: are you ahead of pace or behind?
+If you are searching for a Claude Code statusline, a Claude Code quota monitor, or a Claude Code usage tracker, claude-pace is built for that narrow job. It shows not only how much quota you have used, but whether your current burn rate is sustainable before the window resets.
 
 ![claude-pace statusline demo](.github/claude-pace-demo.gif)
+
+## TL;DR
+
+- Claude Code status line with `5h` and `7d` quota usage, reset countdowns, and pace delta
+- Pace-aware rate limit tracking, `⇡15%` means overspending, `⇣15%` means headroom
+- Pure Bash + jq, single file, no Node.js runtime and no lockfile churn
+- Install as a Claude Code plugin, with `npx`, or as a single script
+
+Most statuslines show "you used 60%." That number means nothing without context. 60% with 30 minutes left? Fine, the window resets soon. 60% with 4 hours left? You are about to hit the wall. claude-pace compares your burn rate to the time remaining and shows the delta.
 
 - **⇣15%** green = you've used 15% less than expected. Headroom. Keep going.
 - **⇡15%** red = you're burning 15% faster than sustainable. Slow down.
 - **15%** / **20%** = used in the 5h and 7d windows. **3h** = resets in 3 hours.
 - Top line: model, effort, project `(branch)`, `3f +24 -7` = git diff stats
 
-## Install
+Claude Code supports custom status lines through its `statusLine` setting and `/statusline` workflow in the official docs:
+
+- [Customize your status line](https://code.claude.com/docs/en/statusline)
+- [Claude Code settings](https://docs.anthropic.com/en/docs/claude-code/settings)
+
+## Table of Contents
+
+- [Install This Claude Code Statusline](#install-this-claude-code-statusline)
+- [Upgrade](#upgrade)
+- [Claude Code Statusline Comparison](#claude-code-statusline-comparison)
+- [How Claude Pace Tracks Quota](#how-claude-pace-tracks-quota)
+- [Claude Code Statusline FAQ](#claude-code-statusline-faq)
+
+## Install This Claude Code Statusline
 
 Requires `jq`.
 
@@ -65,7 +87,7 @@ To remove: delete the `statusLine` block from `~/.claude/settings.json`.
 
 Release notifications: Watch this repo → Custom → Releases.
 
-## How It Compares
+## Claude Code Statusline Comparison
 
 |  | claude-pace | [claude-hud](https://github.com/jarrodwatts/claude-hud) | [CCometixLine](https://github.com/Haleclipse/CCometixLine) | [ccstatusline](https://github.com/sirmalloc/ccstatusline) |
 |---|---|---|---|---|
@@ -79,21 +101,21 @@ Execution and memory measured on Apple Silicon, 300 runs, same stdin JSON.
 
 Need themes, powerline aesthetics, or TUI config? Try [ccstatusline](https://github.com/sirmalloc/ccstatusline). The entire source of claude-pace is [one file](claude-pace.sh). Read it.
 
-## Under the Hood
+## How Claude Pace Tracks Quota
 
 Claude Code polls the statusline every ~300ms:
 
 | Data | Source | Cache |
 |------|--------|-------|
 | Model, context, cost | stdin JSON (single `jq` call) | None needed |
-| Quota (5h, 7d, pace) | stdin `rate_limits` (CC >= 2.1.80) | None needed (real-time) |
+| Quota (5h, 7d, pace) | stdin `rate_limits` (Claude Code >= 2.1.80) | None needed (real-time) |
 | Git branch + diff | `git` commands | Private cache dir, 5s TTL |
 
-Usage tracking requires Claude Code `2.1.80+`, where `rate_limits` is available in statusline stdin. claude-pace does not call the Anthropic Usage API.
+Best experience is on Claude Code `2.1.80+`, where `rate_limits` is available in statusline stdin. On older versions, claude-pace can fall back to the Anthropic Usage API when stdin usage data is unavailable.
 
 Cache files live in a private per-user directory (`$XDG_RUNTIME_DIR/claude-pace` or `~/.cache/claude-pace`, mode 700). All cache reads are validated before use. No files are ever written to shared `/tmp`.
 
-## FAQ
+## Claude Code Statusline FAQ
 
 **Does it need Node.js?**
 No. Only `jq` (available via `brew install jq` or your package manager). No npm, no node_modules, no lock files.
@@ -102,7 +124,7 @@ No. Only `jq` (available via `brew install jq` or your package manager). No npm,
 claude-pace compares your current usage percentage to the fraction of time elapsed in each window (5-hour and 7-day). If you've used 40% of your quota but only 30% of the time has passed, the pace delta shows ⇡10% (red, burning too fast). If you've used 30% with 40% of time elapsed, it shows ⇣10% (green, headroom).
 
 **Does it make network calls?**
-No. All displayed quota data comes from stdin. If `rate_limits` is missing, claude-pace shows `--` for quota and can still show the local session cost.
+Usually no. On Claude Code `2.1.80+`, quota data comes from stdin. On older versions where `rate_limits` is missing, claude-pace can fall back to the Anthropic Usage API and can still show the local session cost.
 
 **Can I inspect the source?**
 The entire tool is [one Bash file](claude-pace.sh). Read it before you install it.

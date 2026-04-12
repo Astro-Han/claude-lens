@@ -1,6 +1,6 @@
 {
   "name": "claude-pace",
-  "description": "A statusline for Claude Code that just works. Single file of Bash + jq -- no Node.js, no npm, nothing to break. Tracks quota pace too.",
+  "description": "Claude Code statusline and quota tracker. Single Bash + jq file, no Node.js, no npm, with pace-aware rate limit tracking.",
   "version": "0.8.0",
   "author": {
     "name": "yuhan",
@@ -13,10 +13,16 @@
   "repository": "https://github.com/Astro-Han/claude-pace",
   "license": "MIT",
   "keywords": [
+    "claude-code",
+    "claude-code-statusline",
     "statusline",
+    "status-line",
     "monitoring",
     "quota",
+    "quota-tracker",
     "usage",
+    "usage-monitor",
+    "rate-limit-tracker",
     "pace",
     "bash"
   ]
