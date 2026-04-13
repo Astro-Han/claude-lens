@@ -449,6 +449,24 @@ JSON
 assert_line "no safe cache root keeps 5h --" 2 '5h --'
 assert_line "no safe cache root keeps session cost" 2 '\$1\.23'
 
+# ── Test 30: Explicit null rate_limits reuses cached quota ──
+echo "Test 30: explicit null rate_limits reuses cache"
+NULL_HOME="$TEST_TMP/null-home"
+NULL_RUNTIME="$TEST_TMP/null-runtime"
+mkdir -p "$NULL_HOME" "$NULL_RUNTIME"
+run_side_effect_with_env "$NULL_HOME" "$NULL_RUNTIME" '{"model":{"display_name":"Opus 4.6"},"workspace":{"project_dir":"'"$PWD"'"},"context_window":{"used_percentage":20,"context_window_size":200000},"rate_limits":{"five_hour":{"used_percentage":30,"resets_at":'"$((NOW + 12000))"'},"seven_day":{"used_percentage":15,"resets_at":'"$((NOW + 500000))"'}}}'
+OUTPUT=$(run_with_env "$NULL_HOME" "$NULL_RUNTIME" '{"model":{"display_name":"Opus 4.6"},"workspace":{"project_dir":"'"$PWD"'"},"context_window":{"used_percentage":20,"context_window_size":200000},"cost":{"total_cost_usd":1.23},"rate_limits":null}')
+assert_line "null rate_limits reuses cached 5h quota" 2 '5h 30%'
+assert_line "null rate_limits reuses cached 7d quota" 2 '7d 15%'
+assert_line_not "null rate_limits suppresses session cost" 2 '\$1\.23'
+
+# ── Test 31: Empty-object rate_limits behaves like partial live data ──
+echo "Test 31: empty-object rate_limits uses live partial behavior"
+OUTPUT=$(run_with_env "$NULL_HOME" "$NULL_RUNTIME" '{"model":{"display_name":"Opus 4.6"},"workspace":{"project_dir":"'"$PWD"'"},"context_window":{"used_percentage":20,"context_window_size":200000},"cost":{"total_cost_usd":1.23},"rate_limits":{}}')
+assert_line "empty-object rate_limits shows 5h --" 2 '5h --'
+assert_line "empty-object rate_limits shows 7d --" 2 '7d --'
+assert_line_not "empty-object rate_limits suppresses session cost" 2 '\$1\.23'
+
 # ── Summary ──
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
