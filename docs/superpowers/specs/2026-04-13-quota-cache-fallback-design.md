@@ -6,7 +6,7 @@ Scope: missing-`rate_limits` fallback only
 
 ## Summary
 
-Add a small last-known quota cache for the case where Claude Code provides normal statusline JSON but omits `rate_limits`.
+Add a small last-known quota cache for the case where Claude Code provides normal statusline JSON but `rate_limits` is absent or null (i.e. whenever the existing parse logic yields `HAS_RL=0`).
 
 The cache stores the last successful stdin quota values:
 
@@ -31,7 +31,7 @@ Empty stdin remains unchanged and continues to render `Claude`.
 - No network fallback
 - No transcript or JSONL parsing
 - No stale marker or alternate display state
-- No TTL or freshness policy
+- No wall-clock TTL or file-age freshness policy (validity is determined solely by the cached reset epochs)
 - No per-project quota cache
 - No change to the empty-stdin behavior
 
@@ -44,18 +44,16 @@ When `HAS_RL=1`:
 - Render quota exactly as today
 - Compute countdowns from live `resets_at`
 - Overwrite the last-known quota cache with `U5/U7/R5/R7` only if all four fields validate for cache storage
-- If live `rate_limits` is partial or malformed, keep rendering the current run using only the live fields that are present
-- Missing live fields remain `--`
+- If live `rate_limits` is partial or malformed (i.e. `HAS_RL=1` but one or more of `five_hour.used_percentage`, `five_hour.resets_at`, `seven_day.used_percentage`, `seven_day.resets_at` is missing or non-numeric), rendering follows existing behavior unchanged: missing `used_percentage` renders `--`, missing `resets_at` suppresses countdown and pace for that window. Session cost remains suppressed because `HAS_RL=1`
 - Do not backfill missing live fields from cache
-- Suppress session cost for that run, matching current `HAS_RL=1` behavior
-- Do not overwrite a previously good cache from a partial or malformed live snapshot
+- Do not overwrite a previously good cache from a partial or malformed live snapshot (this write-guard is the only new logic in the partial case; rendering is already handled)
 
 ### Case 2: `rate_limits` absent
 
 When `HAS_RL=0`:
 
 - Attempt to read the last-known quota cache
-- If the cache is valid and its cached `R5/R7` are still in the future, render it exactly like live quota and suppress session cost
+- If the cache is valid and both cached `R5` and `R7` are still in the future, render it exactly like live quota and suppress session cost
 - If the cache is missing, unreadable, invalid, or already past reset, keep the current no-quota fallback, including session cost when available
 
 Cached quota is intentionally rendered without any stale marker. This is a deliberate simplicity tradeoff.
@@ -83,19 +81,19 @@ If no safe cache root is available, caching remains disabled for that run.
 
 ### Cache shape
 
-Use one global quota cache file, not a per-project key.
+Use one global quota cache file `claude-sl-quota` in the cache root, not a per-project key.
 
 Reason:
 
 - 5h and 7d quota are account-level data
 - Keying by project would make the fallback weaker without adding correctness
 
-The cache record contains:
+The cache record stores the already-normalized shell values (post-jq-floor integers for U5/U7, integer epoch for R5/R7), not raw JSON floats. Record format: `U5<SEP>U7<SEP>R5<SEP>R7` (4 fields in this order, same separator as git cache; read via `CACHE_FIELDS[0..3]`):
 
-- `U5`
-- `U7`
-- `R5`
-- `R7`
+- `CACHE_FIELDS[0]` = `U5`
+- `CACHE_FIELDS[1]` = `U7`
+- `CACHE_FIELDS[2]` = `R5`
+- `CACHE_FIELDS[3]` = `R7`
 
 Use the existing cache helpers:
 
@@ -120,21 +118,21 @@ The cache must be treated as untrusted persisted input.
 
 After reading the quota cache:
 
-- `U5` and `U7` must be validated as numeric percentages before they enter quota formatting logic
+- `U5` and `U7` must be non-negative integers (matching the existing `^[0-9]+$` live-path check; values above 100 are valid during overuse)
 - `R5` and `R7` must be validated as numeric epoch values before converting to remaining minutes
 - cached `R5` and `R7` must still be greater than `NOW`
 - If either cached reset epoch is already expired, treat the entire cache snapshot as invalid for fallback rendering
 
 Before writing the quota cache:
 
-- `U5` and `U7` must be numeric quota values
-- `R5` and `R7` must be numeric epoch values
-- If any field is invalid, skip the cache write and preserve the existing cache contents
+- `U5` and `U7` must be non-negative integers (matching the live-path regex)
+- `R5` and `R7` must be numeric epoch values greater than `NOW`
+- If any field is invalid or any reset epoch is already expired, skip the cache write and preserve the existing cache contents
 
 If any required field is invalid:
 
 - Ignore the cache
-- Fall back to `U5="--" U7="--" RM5="" RM7=""`
+- Fall back to `U5="--" U7="--" RM5="" RM7=""` (SHOW_COST remains unchanged from the HAS_RL=0 default)
 
 Do not add repair logic, migration logic, partial-cache recovery logic, or cache backfill beyond the existing compatibility reader.
 
@@ -164,12 +162,17 @@ Add tests for the following:
    output remains the current no-quota fallback, including session cost when available.
 3. Invalid quota cache contents:
    the script ignores the cache and degrades to the current no-quota fallback.
-4. Seed a good quota cache, then provide partial or malformed live `rate_limits`:
-   the current run must render only the live fields that are present, missing live fields must remain `--`, session cost must stay suppressed, and the good cache must not be overwritten.
+4. Seed a good quota cache, then provide partial live `rate_limits` in three shapes:
+   (a) `rate_limits` present but `five_hour` absent entirely,
+   (b) `rate_limits.five_hour.used_percentage` present but `resets_at` missing,
+   (c) `rate_limits` present but `seven_day` absent entirely.
+   In all cases the good cache must not be overwritten, and session cost must stay suppressed.
 5. Seed a good quota cache, then provide a later missing-`rate_limits` run:
    the script still uses the older valid cache.
-6. Cached reset epochs already at or before `NOW`:
-   the cached snapshot is treated as invalid and the script degrades to the current no-quota fallback.
+6. Cached reset epochs at or before `NOW` (two sub-cases):
+   (a) seed R5 with `$(date +%s)` (equal to or 1s before script's NOW) and R7 still in the future,
+   (b) seed R7 with `$(date +%s)` and R5 still in the future.
+   Both must reject the entire snapshot. This tests the "either expired invalidates all" rule at the exact boundary from both sides.
 7. Empty stdin:
    output remains `Claude`, not cached quota.
 8. No safe cache root:
@@ -177,12 +180,13 @@ Add tests for the following:
 
 ## Tradeoff
 
-This design accepts one intentional tradeoff:
+This design accepts three intentional tradeoffs:
 
-- cached quota may be stale if the same account is used elsewhere or quota changes outside the current local Claude Code flow
+- cached quota may be stale if the same account is used elsewhere, or if different accounts share the same machine (there is no account key in stdin to differentiate; the global cache reflects whichever account wrote last)
+- cached U5/U7 are frozen while time advances, so the pace delta will drift toward "under budget" as the current moment approaches the cached reset epoch; this is bounded by the reset-epoch expiry check and is negligible during a brief absence gap
 - cached quota is still only accepted before its own reset boundary; once the cached reset time has passed, the snapshot is discarded instead of rendered
 
-That tradeoff is acceptable because the goal is continuity with minimal complexity, not a global source of truth.
+These tradeoffs are acceptable because the goal is continuity with minimal complexity, not a global source of truth.
 
 ## Acceptance Criteria
 
