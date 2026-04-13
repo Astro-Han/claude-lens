@@ -250,8 +250,24 @@ OUTPUT=$(run_with_env "$PARTIAL_HOME" "$PARTIAL_RUNTIME" '{"model":{"display_nam
 assert_line "cache keeps original five_hour after missing seven_day partial live" 2 '5h 30%'
 assert_line "cache survives missing seven_day partial live" 2 '7d 15%'
 
-# ── Test 26: Expired quota cache is rejected ──
-echo "Test 26: expired quota cache is rejected"
+# ── Test 26: Expired live snapshot does not overwrite a good cache ──
+echo "Test 26: expired live snapshot does not overwrite cache"
+LIVE_EXPIRED_HOME="$TEST_TMP/live-expired-home"
+LIVE_EXPIRED_RUNTIME="$TEST_TMP/live-expired-runtime"
+mkdir -p "$LIVE_EXPIRED_HOME" "$LIVE_EXPIRED_RUNTIME"
+run_side_effect_with_env "$LIVE_EXPIRED_HOME" "$LIVE_EXPIRED_RUNTIME" '{"model":{"display_name":"Opus 4.6"},"workspace":{"project_dir":"'"$PWD"'"},"context_window":{"used_percentage":20,"context_window_size":200000},"rate_limits":{"five_hour":{"used_percentage":30,"resets_at":'"$((NOW + 12000))"'},"seven_day":{"used_percentage":15,"resets_at":'"$((NOW + 500000))"'}}}'
+run_side_effect_with_env "$LIVE_EXPIRED_HOME" "$LIVE_EXPIRED_RUNTIME" '{"model":{"display_name":"Opus 4.6"},"workspace":{"project_dir":"'"$PWD"'"},"context_window":{"used_percentage":20,"context_window_size":200000},"rate_limits":{"five_hour":{"used_percentage":99,"resets_at":'"$NOW"'},"seven_day":{"used_percentage":66,"resets_at":'"$((NOW + 400000))"'}}}'
+OUTPUT=$(run_with_env "$LIVE_EXPIRED_HOME" "$LIVE_EXPIRED_RUNTIME" '{"model":{"display_name":"Opus 4.6"},"workspace":{"project_dir":"'"$PWD"'"},"context_window":{"used_percentage":20,"context_window_size":200000},"cost":{"total_cost_usd":1.23}}')
+assert_line "expired live R5 keeps cached five_hour" 2 '5h 30%'
+assert_line "expired live R5 keeps cached seven_day" 2 '7d 15%'
+run_side_effect_with_env "$LIVE_EXPIRED_HOME" "$LIVE_EXPIRED_RUNTIME" '{"model":{"display_name":"Opus 4.6"},"workspace":{"project_dir":"'"$PWD"'"},"context_window":{"used_percentage":20,"context_window_size":200000},"rate_limits":{"five_hour":{"used_percentage":30,"resets_at":'"$((NOW + 12000))"'},"seven_day":{"used_percentage":15,"resets_at":'"$((NOW + 500000))"'}}}'
+run_side_effect_with_env "$LIVE_EXPIRED_HOME" "$LIVE_EXPIRED_RUNTIME" '{"model":{"display_name":"Opus 4.6"},"workspace":{"project_dir":"'"$PWD"'"},"context_window":{"used_percentage":20,"context_window_size":200000},"rate_limits":{"five_hour":{"used_percentage":66,"resets_at":'"$((NOW + 11000))"'},"seven_day":{"used_percentage":99,"resets_at":'"$NOW"'}}}'
+OUTPUT=$(run_with_env "$LIVE_EXPIRED_HOME" "$LIVE_EXPIRED_RUNTIME" '{"model":{"display_name":"Opus 4.6"},"workspace":{"project_dir":"'"$PWD"'"},"context_window":{"used_percentage":20,"context_window_size":200000},"cost":{"total_cost_usd":1.23}}')
+assert_line "expired live R7 keeps cached five_hour" 2 '5h 30%'
+assert_line "expired live R7 keeps cached seven_day" 2 '7d 15%'
+
+# ── Test 27: Expired quota cache is rejected ──
+echo "Test 27: expired quota cache is rejected"
 EXPIRED_HOME="$TEST_TMP/expired-home"
 EXPIRED_RUNTIME="$TEST_TMP/expired-runtime"
 EXPIRED_CACHE_ROOT="$EXPIRED_RUNTIME/claude-pace"
@@ -268,14 +284,14 @@ assert_line "expired R7 also rejects cached five_hour" 2 '5h --'
 assert_line "expired R7 rejects whole snapshot" 2 '7d --'
 assert_line "expired R7 keeps session cost" 2 '\$1\.23'
 
-# ── Test 27: Empty stdin stays Claude ──
-echo "Test 27: empty stdin still returns Claude"
+# ── Test 28: Empty stdin stays Claude ──
+echo "Test 28: empty stdin still returns Claude"
 OUTPUT=$(printf '' | bash claude-pace.sh 2>/dev/null | strip_ansi)
 assert_line_count "empty stdin stays single line" 1
 assert_line "empty stdin prints Claude" 1 '^Claude$'
 
-# ── Test 28: No safe cache root skips quota cache writes ──
-echo "Test 28: no safe cache root skips quota cache"
+# ── Test 29: No safe cache root skips quota cache writes ──
+echo "Test 29: no safe cache root skips quota cache"
 OUTPUT=$(env HOME="/dev/null" XDG_RUNTIME_DIR="" USER=tester PATH="$PATH" \
   bash claude-pace.sh 2>/dev/null <<<"$(
     cat <<JSON
@@ -306,6 +322,7 @@ Expected:
 PASS: invalid cache falls back to no quota 5h
 PASS: partial live missing five_hour renders 5h --
 PASS: cache keeps original seven_day after missing five_hour partial live
+PASS: expired live R5 keeps cached five_hour
 PASS: cache survives missing seven_day partial live
 PASS: expired R5 rejects whole snapshot
 PASS: empty stdin prints Claude
@@ -412,8 +429,9 @@ git commit -m "docs: describe quota cache fallback"
 - `HAS_RL=1` write only from fully valid snapshot: covered in Task 1 implementation and Task 2 partial-live tests.
 - `HAS_RL=0` cache hit suppresses cost: covered in Task 1 tests and implementation.
 - Invalid or expired cached resets degrade to no-quota fallback: covered in Task 2 tests and Task 1 helper.
-- Empty stdin unchanged: covered in Task 2 test 26.
-- No safe cache root behavior: covered in Task 2 test 27.
+- Expired live snapshots do not overwrite a previously good cache: covered in Task 2 test 26.
+- Empty stdin unchanged: covered in Task 2 test 28.
+- No safe cache root behavior: covered in Task 2 test 29.
 - Docs sync for changed behavior: covered in Task 3.
 
 ### Placeholder Scan
