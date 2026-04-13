@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Reuse the last known stdin quota snapshot when `rate_limits` is absent, as long as both cached reset times are still in the future
+- Ignore invalid, expired, or partial-live quota snapshots instead of overwriting a previously good cache
+
 ## 0.8.0
 
 - Remove the Anthropic Usage API fallback, quota tracking now reads only from stdin `rate_limits`

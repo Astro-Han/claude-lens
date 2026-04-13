@@ -108,10 +108,10 @@ Claude Code polls the statusline every ~300ms:
 | Data | Source | Cache |
 |------|--------|-------|
 | Model, context, cost | stdin JSON (single `jq` call) | None needed |
-| Quota (5h, 7d, pace) | stdin `rate_limits` (Claude Code >= 2.1.80) | None needed (real-time) |
+| Quota (5h, 7d, pace) | stdin `rate_limits`; fallback to last-known private cache when `rate_limits` is absent | Private cache root, accepted only before cached reset |
 | Git branch + diff | `git` commands | Private cache dir, 5s TTL |
 
-Best experience is on Claude Code `2.1.80+`, where `rate_limits` is available in statusline stdin. On older versions, claude-pace can fall back to the Anthropic Usage API when stdin usage data is unavailable.
+Best experience is on Claude Code `2.1.80+`, where `rate_limits` is available in statusline stdin. When a later statusline run omits `rate_limits`, claude-pace can reuse the last known stdin quota snapshot from its private cache until either cached reset time expires.
 
 Cache files live in a private per-user directory (`$XDG_RUNTIME_DIR/claude-pace` or `~/.cache/claude-pace`, mode 700). All cache reads are validated before use. No files are ever written to shared `/tmp`.
 
@@ -124,7 +124,7 @@ No. Only `jq` (available via `brew install jq` or your package manager). No npm,
 claude-pace compares your current usage percentage to the fraction of time elapsed in each window (5-hour and 7-day). If you've used 40% of your quota but only 30% of the time has passed, the pace delta shows ⇡10% (red, burning too fast). If you've used 30% with 40% of time elapsed, it shows ⇣10% (green, headroom).
 
 **Does it make network calls?**
-Usually no. On Claude Code `2.1.80+`, quota data comes from stdin. On older versions where `rate_limits` is missing, claude-pace can fall back to the Anthropic Usage API and can still show the local session cost.
+No. Quota data comes from stdin `rate_limits` on Claude Code `2.1.80+`. If a later statusline run omits `rate_limits`, claude-pace can reuse the last known stdin quota snapshot from its private cache as long as that snapshot's reset times are still in the future. Otherwise it falls back to `--` and may still show the local session cost.
 
 **Can I inspect the source?**
 The entire tool is [one Bash file](claude-pace.sh). Read it before you install it.
