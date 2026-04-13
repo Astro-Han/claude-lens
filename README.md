@@ -137,4 +137,4 @@ The entire tool is [one Bash file](claude-pace.sh). Read it before you install i
 
 MIT
 
-*Last updated: 2026-04-13 · v0.8.0*
+*Last updated: 2026-04-13 · v0.8.2*
