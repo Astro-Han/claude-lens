@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Regression tests for claude-pace statusline
 # Usage: bash test.sh
+# shellcheck disable=SC2016  # regex literals like '\$1\.23' intentionally use single quotes
 set -euo pipefail
 
 PASS=0 FAIL=0
@@ -523,6 +524,27 @@ else
   echo "    stderr:"
   sed 's/^/    /' "$UNREADABLE_QUOTA_ERR"
 fi
+
+# ── Test 34: Effort level icons for all five levels ──
+echo "Test 34: effort level icons"
+EFFORT_HOME="$TEST_TMP/effort-home"
+EFFORT_RUNTIME="$TEST_TMP/effort-runtime"
+mkdir -p "$EFFORT_HOME/.claude" "$EFFORT_RUNTIME"
+effort_input() {
+  printf '{"model":{"display_name":"Opus 4.6"},"workspace":{"project_dir":"%s"},"context_window":{"used_percentage":20,"context_window_size":200000},"rate_limits":{"five_hour":{"used_percentage":30,"resets_at":%d},"seven_day":{"used_percentage":15,"resets_at":%d}}}' \
+    "$PWD" "$((NOW + 12000))" "$((NOW + 500000))"
+}
+for pair in 'low:◌' 'medium:○' 'high:◎' 'xhigh:◉' 'max:●'; do
+  level="${pair%%:*}"
+  glyph="${pair##*:}"
+  printf '{"effortLevel":"%s"}\n' "$level" >"$EFFORT_HOME/.claude/settings.json"
+  OUTPUT=$(run_with_env "$EFFORT_HOME" "$EFFORT_RUNTIME" "$(effort_input)")
+  assert_line "effort $level shows $glyph" 1 " $glyph "
+  assert_aligned "| aligned for effort $level"
+done
+rm -f "$EFFORT_HOME/.claude/settings.json"
+OUTPUT=$(run_with_env "$EFFORT_HOME" "$EFFORT_RUNTIME" "$(effort_input)")
+assert_line "absent settings.json falls back to medium glyph" 1 ' ○ '
 
 # ── Summary ──
 echo ""
