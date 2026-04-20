@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.3
+
+- Add support for the new `xhigh` effort level and handle `max` explicitly
+- Redesign effort indicator glyphs to a 5-step circle family (`◌ ○ ◎ ◉ ●`) for consistent cell width across fonts
+- Extend test coverage with per-level glyph and pipe alignment assertions
+
 ## 0.8.2
 
 - Avoid rewriting the quota cache when the live stdin snapshot is unchanged
