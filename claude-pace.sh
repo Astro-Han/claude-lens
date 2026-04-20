@@ -142,7 +142,7 @@ IFS=$'\t' read -r MODEL DIR PCT CTX COST EFF HAS_RL U5 U7 R5 R7 < <(
     (.rate_limits.five_hour.resets_at//0),
     (.rate_limits.seven_day.resets_at//0)]|@tsv' <<<"$input"
 )
-case "${EFF:-default}" in high) EF='●' ;; low) EF='◔' ;; *) EF='◑' ;; esac
+case "${EFF:-default}" in low) EF='◌' ;; high) EF='◎' ;; xhigh) EF='◉' ;; max) EF='●' ;; *) EF='○' ;; esac
 
 # ── Context label (needed by MODEL_SHORT and line 2) ──
 if ((CTX >= 1000000)); then
