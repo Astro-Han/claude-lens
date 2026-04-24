@@ -135,7 +135,7 @@ IFS=$'\t' read -r MODEL DIR PCT CTX COST EFF HAS_RL U5 U7 R5 R7 < <(
     '[(.model.display_name//"?"),(.workspace.project_dir//"."),
     (.context_window.used_percentage//0|floor),(.context_window.context_window_size//0),
     (.cost.total_cost_usd//0),
-    ($cfg[0].effortLevel//"default"),
+    (.effort.level//$cfg[0].effortLevel//"default"),
     (if .rate_limits then 1 else 0 end),
     (.rate_limits.five_hour.used_percentage//null|if type=="number" then floor else "--" end),
     (.rate_limits.seven_day.used_percentage//null|if type=="number" then floor else "--" end),

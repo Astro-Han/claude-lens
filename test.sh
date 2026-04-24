@@ -546,6 +546,32 @@ rm -f "$EFFORT_HOME/.claude/settings.json"
 OUTPUT=$(run_with_env "$EFFORT_HOME" "$EFFORT_RUNTIME" "$(effort_input)")
 assert_line "absent settings.json falls back to medium glyph" 1 ' ○ '
 
+# ── Test 35: Effort level from stdin (CC ≥ 2.1.119) ──
+echo "Test 35: effort level from stdin"
+STDIN_EFFORT_HOME="$TEST_TMP/stdin-effort-home"
+STDIN_EFFORT_RUNTIME="$TEST_TMP/stdin-effort-runtime"
+mkdir -p "$STDIN_EFFORT_HOME/.claude" "$STDIN_EFFORT_RUNTIME"
+effort_stdin_input() {
+  local level="$1"
+  printf '{"model":{"display_name":"Opus 4.6"},"workspace":{"project_dir":"%s"},"context_window":{"used_percentage":20,"context_window_size":200000},"effort":{"level":"%s"},"rate_limits":{"five_hour":{"used_percentage":30,"resets_at":%d},"seven_day":{"used_percentage":15,"resets_at":%d}}}' \
+    "$PWD" "$level" "$((NOW + 12000))" "$((NOW + 500000))"
+}
+for pair in 'low:◌' 'medium:○' 'high:◎' 'xhigh:◉' 'max:●'; do
+  level="${pair%%:*}"
+  glyph="${pair##*:}"
+  OUTPUT=$(run_with_env "$STDIN_EFFORT_HOME" "$STDIN_EFFORT_RUNTIME" "$(effort_stdin_input "$level")")
+  assert_line "stdin effort $level shows $glyph" 1 " $glyph "
+  assert_aligned "| aligned for stdin effort $level"
+done
+
+# ── Test 36: Stdin effort.level overrides settings.json effortLevel ──
+echo "Test 36: stdin effort overrides settings.json"
+printf '{"effortLevel":"low"}\n' >"$STDIN_EFFORT_HOME/.claude/settings.json"
+OUTPUT=$(run_with_env "$STDIN_EFFORT_HOME" "$STDIN_EFFORT_RUNTIME" "$(effort_stdin_input "max")")
+assert_line "stdin effort.level wins over settings.json" 1 ' ● '
+assert_aligned "| aligned with stdin override"
+rm -f "$STDIN_EFFORT_HOME/.claude/settings.json"
+
 # ── Summary ──
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
