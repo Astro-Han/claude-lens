@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.4
+
+- Read `effort.level` from stdin when available (Claude Code 2.1.119+), falling back to `~/.claude/settings.json` `effortLevel` on older versions
+- Add regression coverage for stdin effort levels and stdin-over-settings precedence (thanks @lifebugz in https://github.com/Astro-Han/claude-pace/pull/11)
+
 ## 0.8.3
 
 - Add support for the new `xhigh` effort level and handle `max` explicitly
