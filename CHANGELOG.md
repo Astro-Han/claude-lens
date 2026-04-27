@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.5
+
+- Show the effort level as a word (`low` / `medium` / `high` / `xhigh` / `max`) on line 1 instead of a glyph, for readability (https://github.com/Astro-Han/claude-pace/issues/12)
+- Bump model-name truncation budget on line 1 from 22 to 28 chars to fit the longest word (`medium`) without clipping
+- Update regression tests to assert effort word + pipe alignment for all five levels, and pin the new 28-char truncation budget so a `Sonnet 4.6 (200K) medium` line stays unclipped
+
 ## 0.8.4
 
 - Read `effort.level` from stdin when available (Claude Code 2.1.119+), falling back to `~/.claude/settings.json` `effortLevel` on older versions

@@ -1,6 +1,6 @@
 {
   "name": "claude-pace",
-  "version": "0.8.4",
+  "version": "0.8.5",
   "description": "Claude Code statusline and rate limit tracker. Pure Bash + jq, single file.",
   "bin": {
     "claude-pace": "cli.js"
