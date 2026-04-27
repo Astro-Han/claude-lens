@@ -142,7 +142,7 @@ IFS=$'\t' read -r MODEL DIR PCT CTX COST EFF HAS_RL U5 U7 R5 R7 < <(
     (.rate_limits.five_hour.resets_at//0),
     (.rate_limits.seven_day.resets_at//0)]|@tsv' <<<"$input"
 )
-case "${EFF:-default}" in low) EF='◌' ;; high) EF='◎' ;; xhigh) EF='◉' ;; max) EF='●' ;; *) EF='○' ;; esac
+case "${EFF:-default}" in low) EF='low' ;; high) EF='high' ;; xhigh) EF='xhigh' ;; max) EF='max' ;; *) EF='medium' ;; esac
 
 # ── Context label (needed by MODEL_SHORT and line 2) ──
 if ((CTX >= 1000000)); then
@@ -154,9 +154,10 @@ else CL=""; fi
 # ── MODEL_SHORT: strip redundant context label ──
 MODEL=${MODEL/ context)/)}
 [[ "$CTX" -gt 0 && "$MODEL" != *"("* ]] && MODEL="${MODEL} (${CL})"
-# Truncate long model names to keep padding within 0-5 chars.
+# Cap "MODEL EF" at 28 chars; 28 fits the longest effort word ('medium', 6 chars)
+# plus a typical "Sonnet 4.6 (200K)" without ellipsis.
 _ML="${MODEL} ${EF}"
-((${#_ML} > 22)) && MODEL="${MODEL:0:$((22 - 2 - ${#EF}))}…"
+((${#_ML} > 28)) && MODEL="${MODEL:0:$((28 - 2 - ${#EF}))}…"
 
 # ── Progress Bar ──
 F=$((PCT / 10))

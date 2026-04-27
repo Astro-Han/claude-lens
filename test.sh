@@ -525,8 +525,8 @@ else
   sed 's/^/    /' "$UNREADABLE_QUOTA_ERR"
 fi
 
-# ── Test 34: Effort level icons for all five levels ──
-echo "Test 34: effort level icons"
+# ── Test 34: Effort level words for all five levels ──
+echo "Test 34: effort level words"
 EFFORT_HOME="$TEST_TMP/effort-home"
 EFFORT_RUNTIME="$TEST_TMP/effort-runtime"
 mkdir -p "$EFFORT_HOME/.claude" "$EFFORT_RUNTIME"
@@ -534,17 +534,15 @@ effort_input() {
   printf '{"model":{"display_name":"Opus 4.6"},"workspace":{"project_dir":"%s"},"context_window":{"used_percentage":20,"context_window_size":200000},"rate_limits":{"five_hour":{"used_percentage":30,"resets_at":%d},"seven_day":{"used_percentage":15,"resets_at":%d}}}' \
     "$PWD" "$((NOW + 12000))" "$((NOW + 500000))"
 }
-for pair in 'low:◌' 'medium:○' 'high:◎' 'xhigh:◉' 'max:●'; do
-  level="${pair%%:*}"
-  glyph="${pair##*:}"
+for level in low medium high xhigh max; do
   printf '{"effortLevel":"%s"}\n' "$level" >"$EFFORT_HOME/.claude/settings.json"
   OUTPUT=$(run_with_env "$EFFORT_HOME" "$EFFORT_RUNTIME" "$(effort_input)")
-  assert_line "effort $level shows $glyph" 1 " $glyph "
+  assert_line "effort $level shows word" 1 " $level "
   assert_aligned "| aligned for effort $level"
 done
 rm -f "$EFFORT_HOME/.claude/settings.json"
 OUTPUT=$(run_with_env "$EFFORT_HOME" "$EFFORT_RUNTIME" "$(effort_input)")
-assert_line "absent settings.json falls back to medium glyph" 1 ' ○ '
+assert_line "absent settings.json falls back to medium word" 1 ' medium '
 
 # ── Test 35: Effort level from stdin (CC ≥ 2.1.119) ──
 echo "Test 35: effort level from stdin"
@@ -556,11 +554,9 @@ effort_stdin_input() {
   printf '{"model":{"display_name":"Opus 4.6"},"workspace":{"project_dir":"%s"},"context_window":{"used_percentage":20,"context_window_size":200000},"effort":{"level":"%s"},"rate_limits":{"five_hour":{"used_percentage":30,"resets_at":%d},"seven_day":{"used_percentage":15,"resets_at":%d}}}' \
     "$PWD" "$level" "$((NOW + 12000))" "$((NOW + 500000))"
 }
-for pair in 'low:◌' 'medium:○' 'high:◎' 'xhigh:◉' 'max:●'; do
-  level="${pair%%:*}"
-  glyph="${pair##*:}"
+for level in low medium high xhigh max; do
   OUTPUT=$(run_with_env "$STDIN_EFFORT_HOME" "$STDIN_EFFORT_RUNTIME" "$(effort_stdin_input "$level")")
-  assert_line "stdin effort $level shows $glyph" 1 " $glyph "
+  assert_line "stdin effort $level shows word" 1 " $level "
   assert_aligned "| aligned for stdin effort $level"
 done
 
@@ -568,9 +564,16 @@ done
 echo "Test 36: stdin effort overrides settings.json"
 printf '{"effortLevel":"low"}\n' >"$STDIN_EFFORT_HOME/.claude/settings.json"
 OUTPUT=$(run_with_env "$STDIN_EFFORT_HOME" "$STDIN_EFFORT_RUNTIME" "$(effort_stdin_input "max")")
-assert_line "stdin effort.level wins over settings.json" 1 ' ● '
+assert_line "stdin effort.level wins over settings.json" 1 ' max '
 assert_aligned "| aligned with stdin override"
 rm -f "$STDIN_EFFORT_HOME/.claude/settings.json"
+
+# ── Test 37: Truncation budget (28) fits longest word without ellipsis ──
+# "Sonnet 4.6 (200K) medium" = 24 chars; budget=28 keeps it whole, budget=22 would clip to "Sonnet 4.6 (20… medium".
+echo "Test 37: truncation budget fits longest word"
+OUTPUT=$(run '{"model":{"display_name":"Sonnet 4.6"},"workspace":{"project_dir":"'"$PWD"'"},"context_window":{"used_percentage":20,"context_window_size":200000},"effort":{"level":"medium"},"rate_limits":{"five_hour":{"used_percentage":30,"resets_at":'$((NOW + 12000))'},"seven_day":{"used_percentage":15,"resets_at":'$((NOW + 500000))'}}}')
+assert_line "Sonnet 4.6 (200K) medium fits without ellipsis" 1 'Sonnet 4\.6 \(200K\) medium'
+assert_line_not "no ellipsis on medium with mid-length model" 1 '…'
 
 # ── Summary ──
 echo ""
