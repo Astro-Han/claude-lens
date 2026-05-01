@@ -133,7 +133,7 @@ _stale() { [ ! -f "$1" ] || [ $((NOW - $(stat -f%m "$1" 2>/dev/null || stat -c%Y
 # --argjson path works on Windows Git Bash (where /proc/<pid>/fd/N used by
 # <(...) is unavailable and --slurpfile silently fails, yielding empty fields).
 HAS_RL=0
-_SETTINGS=$(cat ~/.claude/settings.json 2>/dev/null)
+_SETTINGS=$(cat "$HOME/.claude/settings.json" 2>/dev/null)
 echo "$_SETTINGS" | jq -e . >/dev/null 2>&1 || _SETTINGS='{}'
 IFS=$'\t' read -r MODEL DIR PCT CTX COST EFF HAS_RL U5 U7 R5 R7 < <(
   jq -r --argjson cfg "$_SETTINGS" \
