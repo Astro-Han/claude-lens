@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.6
+
+- Fix Windows Git Bash compatibility: replace `jq --slurpfile` + process substitution with `--argjson`, since `/proc/<pid>/fd/N` is unavailable on Windows and previously caused `MODEL` and `DIR` to render blank (thanks @capraCoder in https://github.com/Astro-Han/claude-pace/pull/13)
+- Validate `~/.claude/settings.json` with `jq -e .` before passing to `--argjson`, falling back to `{}` for empty, whitespace-only, or malformed JSON so settings parsing failures stay localized to effort level
+
 ## 0.8.5
 
 - Show the effort level as a word (`low` / `medium` / `high` / `xhigh` / `max`) on line 1 instead of a glyph, for readability (https://github.com/Astro-Han/claude-pace/issues/12)
