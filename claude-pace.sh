@@ -129,13 +129,18 @@ _stale() { [ ! -f "$1" ] || [ $((NOW - $(stat -f%m "$1" 2>/dev/null || stat -c%Y
 
 # ── Parse stdin + settings in one jq call ──
 # Fields: MODEL DIR PCT CTX COST EFF HAS_RL U5 U7 R5 R7
+# Read settings into a shell var rather than process substitution so the jq
+# --argjson path works on Windows Git Bash (where /proc/<pid>/fd/N used by
+# <(...) is unavailable and --slurpfile silently fails, yielding empty fields).
 HAS_RL=0
+_SETTINGS=$(cat "$HOME/.claude/settings.json" 2>/dev/null)
+echo "$_SETTINGS" | jq -e . >/dev/null 2>&1 || _SETTINGS='{}'
 IFS=$'\t' read -r MODEL DIR PCT CTX COST EFF HAS_RL U5 U7 R5 R7 < <(
-  jq -r --slurpfile cfg <(cat ~/.claude/settings.json 2>/dev/null || echo '{}') \
+  jq -r --argjson cfg "$_SETTINGS" \
     '[(.model.display_name//"?"),(.workspace.project_dir//"."),
     (.context_window.used_percentage//0|floor),(.context_window.context_window_size//0),
     (.cost.total_cost_usd//0),
-    (.effort.level//$cfg[0].effortLevel//"default"),
+    (.effort.level//$cfg.effortLevel//"default"),
     (if .rate_limits then 1 else 0 end),
     (.rate_limits.five_hour.used_percentage//null|if type=="number" then floor else "--" end),
     (.rate_limits.seven_day.used_percentage//null|if type=="number" then floor else "--" end),
